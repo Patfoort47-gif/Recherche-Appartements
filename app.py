@@ -2,7 +2,7 @@ import random
 import folium
 import pandas as pd
 import streamlit as st
-from streamlit_folium import st_folium
+from streamlit_folium import folium_static
 
 # Configuration de la page
 st.set_page_config(
@@ -15,7 +15,7 @@ st.set_page_config(
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1kaozoe4IX09695Ibf-Cl99x3B0O_BSq954lCS_889xo/export?format=csv&gid=0"
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def load_data():
   try:
     df = pd.read_csv(SHEET_URL)
@@ -94,8 +94,8 @@ if not df.empty:
   with tab2:
     st.subheader("🗺️ Carte Interactive des Appartements")
     st.markdown(
-        "Cliquez sur un marqueur pour afficher la bulle d'information, puis"
-        " **cliquez sur le lien** pour ouvrir directement l'annonce."
+        "Cliquez sur un marqueur pour afficher les informations, puis cliquez"
+        " sur le bouton pour ouvrir l'annonce."
     )
 
     coords_villes = {
@@ -107,8 +107,8 @@ if not df.empty:
         "Mas thibert": {"lat": 43.5858, "lon": 4.6897},
     }
 
-    # Création de la carte Folium centrée sur Arles
-    m = folium.Map(location=[43.6767, 4.6278], zoom_level=11)
+    # Création de la carte Folium
+    m = folium.Map(location=[43.6767, 4.6278], zoom_level=11, control_scale=True)
 
     if "Ville / Quartier" in df.columns:
       for index, row in df.iterrows():
@@ -119,7 +119,6 @@ if not df.empty:
             base_coords = coords
             break
 
-        # Légère variation pour éviter les superpositions exactes
         lat_var = base_coords["lat"] + random.uniform(-0.003, 0.003)
         lon_var = base_coords["lon"] + random.uniform(-0.003, 0.003)
 
@@ -131,7 +130,6 @@ if not df.empty:
         if not lien.startswith("http"):
           lien = "#"
 
-        # Contenu HTML du pop-up qui reste affiché au clic
         popup_html = f"""
                 <div style="font-family: sans-serif; width: 200px;">
                     <b>{ville_text}</b><br>
@@ -139,7 +137,7 @@ if not df.empty:
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
                     <b>Agence :</b> {agence}<br><br>
-                    <a href="{lien}" target="_blank" style="background-color: #ff4b4b; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">🔗 Voir l'annonce</a>
+                    <a href="{lien}" target="_blank" style="background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">🔗 Voir l'annonce</a>
                 </div>
                 """
 
@@ -150,8 +148,8 @@ if not df.empty:
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
-    # Affichage de la carte dans Streamlit
-    st_folium(m, width=1200, height=550)
+    # Utilisation de folium_static pour bloquer les boucles de rechargement intempestives
+    folium_static(m, width=1100, height=550)
 
   with tab3:
     st.subheader("➕ Ajouter un nouvel appartement")
