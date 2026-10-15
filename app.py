@@ -1,4 +1,5 @@
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
 
 # Configuration de la page
@@ -31,9 +32,8 @@ st.markdown(
 )
 
 if not df.empty:
-  # Nettoyage rapide des colonnes si besoin
-  if "Loyer" in df.columns and df["Loyer"].dtype == "object":
-    # Tentative d'extraction de la valeur numérique du loyer pour les stats/filtres
+  # Nettoyage rapide du loyer pour les filtres
+  if "Loyer" in df.columns:
     df["Loyer_Num"] = (
         df["Loyer"]
         .astype(str)
@@ -45,21 +45,18 @@ if not df.empty:
   # --- BARRE LATÉRALE DE FILTRES ---
   st.sidebar.header("🔍 Filtres & Paramètres")
 
-  # Filtre par Ville / Quartier
   if "Ville / Quartier" in df.columns:
     villes = ["Toutes"] + list(df["Ville / Quartier"].dropna().unique())
     ville_choisie = st.sidebar.selectbox("Filtrer par Ville / Quartier", villes)
     if ville_choisie != "Toutes":
       df = df[df["Ville / Quartier"] == ville_choisie]
 
-  # Filtre par Pièces
   if "Pièces" in df.columns:
     pieces = ["Toutes"] + list(df["Pièces"].dropna().unique())
     piece_choisie = st.sidebar.selectbox("Filtrer par Pièces", pieces)
     if piece_choisie != "Toutes":
       df = df[df["Pièces"] == piece_choisie]
 
-  # Filtre par budget max
   if "Loyer_Num" in df.columns:
     max_loyer = int(df["Loyer_Num"].max()) if not df.isna().all() else 1000
     budget_max = st.sidebar.slider(
@@ -67,7 +64,7 @@ if not df.empty:
     )
     df = df[df["Loyer_Num"] <= budget_max]
 
-  # --- TABLEAU DE BORD / KPI ---
+  # --- KPIs ---
   col1, col2, col3, col4 = st.columns(4)
   col1.metric("Annonces affichées", len(df))
   if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
@@ -76,41 +73,28 @@ if not df.empty:
   col3.metric("Visites / RDV", "À suivre")
   col4.metric("Mode", "Collaboratif 👥")
 
-  # --- ONGLETS PRINCIPAUX ---
+  # --- ONGLETS ---
   tab1, tab2, tab3 = st.tabs(
-      ["📋 Tableau & Modifications", "🗺️ Carte des Appartements", "➕ Ajouter un bien"]
+      ["📋 Tableau & Modifications", "🗺️ Carte Interactive", "➕ Ajouter un bien"]
   )
 
   with tab1:
     st.subheader("Tableau interactif des annonces")
-    st.info(
-        "💡 Vous pouvez consulter, modifier les cellules directement ou trier"
-        " les colonnes."
-    )
-
-    # Affichage du tableau éditable
-    edited_df = st.data_editor(
+    st.data_editor(
         df.drop(columns=["Loyer_Num"], errors="ignore"),
         use_container_width=True,
         num_rows="dynamic",
         key="main_editor",
     )
 
-    st.warning(
-        "⚠️ *Note :* Pour que les modifications faites dans l'application se"
-        " répercutent définitivement dans votre Google Sheet d'origine, veillez"
-        " à mettre à jour les lignes correspondantes dans le Google Sheet, ou"
-        " utilisez l'onglet 'Ajouter un bien' pour vos saisies."
-    )
-
   with tab2:
-    st.subheader("🗺️ Localisation géographique des annonces")
+    st.subheader("🗺️ Carte Interactive des Appartements")
     st.markdown(
-        "Visualisez rapidement où se situent les biens sélectionnés."
+        "Survolez ou cliquez sur les points pour afficher les informations de"
+        " l'appartement (Loyer, Surface, Quartier)."
     )
 
-    # Simulation de coordonnées pour la carte (basée sur les villes d'Arles / St-Gilles / Bellegarde)
-    # Coordonnées approximatives des zones principales pour l'affichage cartographique
+    # Coordonnées de base par zone + petite variation aléatoire pour éviter la superposition parfaite
     coords_villes = {
         "Arles": {"lat": 43.6767, "lon": 4.6278},
         "Saint-Gilles": {"lat": 43.6811, "lon": 4.4328},
@@ -120,24 +104,69 @@ if not df.empty:
         "Mas thibert": {"lat": 43.5858, "lon": 4.6897},
     }
 
-    # Création d'un dataset de coordonnées pour Streamlit st.map
-    map_data = []
+    import random
+
+    map_records = []
     if "Ville / Quartier" in df.columns:
       for index, row in df.iterrows():
         ville_text = str(row["Ville / Quartier"])
-        found = False
+        base_coords = {"lat": 43.6767, "lon": 4.6278}  # Défaut Arles
         for v_key, coords in coords_villes.items():
           if v_key.lower() in ville_text.lower():
-            map_data.append({"lat": coords["lat"], "lon": coords["lon"]})
-            found = True
+            base_coords = coords
             break
-        # Position par défaut sur Arles si non trouvé
-        if not found:
-          map_data.append({"lat": 43.6767, "lon": 4.6278})
 
-    if map_data:
-      map_df = pd.DataFrame(map_data)
-      st.map(map_df, zoom=10)
+        # Ajout d'une infime variation aléatoire pour éviter que les points du même quartier se cachent entre eux
+        lat_var = base_coords["lat"] + random.uniform(-0.003, 0.003)
+        lon_var = base_coords["lon"] + random.uniform(-0.003, 0.003)
+
+        map_records.append({
+            "lat": lat_var,
+            "lon": lon_var,
+            "Loyer": str(row.get("Loyer", "N/C")),
+            "Surface": str(row.get("M²", "N/C")),
+            "Pièces": str(row.get("Pièces", "N/C")),
+            "Quartier": ville_text,
+            "Agence": str(row.get("Agence", "N/C")),
+        })
+
+    if map_records:
+      map_df = pd.DataFrame(map_records)
+
+      # Configuration de la carte Pydeck avec info-bulle au survol
+      layer = pdk.Layer(
+          "ScatterplotLayer",
+          data=map_df,
+          get_position=["lon", "lat"],
+          get_color=[255, 75, 75, 180],  # Rouge/Rose sympa
+          get_radius=250,  # Taille du point
+          pickable=True,
+          auto_highlight=True,
+      )
+
+      # Centrer la carte sur la première coordonnée ou sur Arles par défaut
+      view_state = pdk.ViewState(
+          latitude=43.6767, longitude=4.6278, zoom=11, pitch=0
+      )
+
+      r = pdk.Deck(
+          layers=[layer],
+          initial_view_state=view_state,
+          tooltip={
+              "html": (
+                  "<b>Quartier :</b> {Quartier}<br><b>Loyer :</b>"
+                  " {Loyer}<br><b>Surface :</b> {Surface} m²<br><b>Pièces :"
+                  "</b> {Pièces}<br><b>Agence :</b> {Agence}"
+              ),
+              "style": {
+                  "backgroundColor": "steelblue",
+                  "color": "white",
+                  "padding": "10px",
+              },
+          },
+      )
+
+      st.pydeck_chart(r)
     else:
       st.info("Aucune donnée géographique disponible pour afficher la carte.")
 
@@ -158,15 +187,12 @@ if not df.empty:
         f_victor = st.text_input("Avis Victor (ex: Oui+)")
         f_rdv = st.text_input("RDV pris ?")
 
-      submitted = st.form_submit_button(
-          "Générer les informations à copier"
-      )
+      submitted = st.form_submit_button("Générer les informations à copier")
 
       if submitted:
         st.success(
             "Appartement validé ! Vous pouvez copier ces informations et les"
-            " coller tout en bas de votre Google Sheet partagé pour qu'il"
-            " apparaisse des deux côtés instantanément."
+            " coller tout en bas de votre Google Sheet partagé."
         )
         st.code(
             f"Loyer: {f_loyer} | M²: {f_m2} | Pièces: {f_pieces} | Ville:"
