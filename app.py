@@ -1,3 +1,4 @@
+import random
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
@@ -32,7 +33,7 @@ st.markdown(
 )
 
 if not df.empty:
-  # Nettoyage rapide du loyer pour les filtres
+  # Nettoyage sécurisé du loyer pour les filtres
   if "Loyer" in df.columns:
     df["Loyer_Num"] = (
         df["Loyer"]
@@ -57,12 +58,15 @@ if not df.empty:
     if piece_choisie != "Toutes":
       df = df[df["Pièces"] == piece_choisie]
 
+  # Calcul sécurisé du loyer max sans utiliser .isna().all() sur le DataFrame
+  if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
+    max_loyer_val = int(df["Loyer_Num"].max())
+  else:
+    max_loyer_val = 1000
+
+  budget_max = st.sidebar.slider("Budget Loyer Max (€)", 400, 1500, max_loyer_val, 25)
   if "Loyer_Num" in df.columns:
-    max_loyer = int(df["Loyer_Num"].max()) if not df.isna().all() else 1000
-    budget_max = st.sidebar.slider(
-        "Budget Loyer Max (€)", 400, 1500, max_loyer, 25
-    )
-    df = df[df["Loyer_Num"] <= budget_max]
+    df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
   # --- KPIs ---
   col1, col2, col3, col4 = st.columns(4)
@@ -94,7 +98,6 @@ if not df.empty:
         " l'appartement (Loyer, Surface, Quartier)."
     )
 
-    # Coordonnées de base par zone + petite variation aléatoire pour éviter la superposition parfaite
     coords_villes = {
         "Arles": {"lat": 43.6767, "lon": 4.6278},
         "Saint-Gilles": {"lat": 43.6811, "lon": 4.4328},
@@ -104,19 +107,16 @@ if not df.empty:
         "Mas thibert": {"lat": 43.5858, "lon": 4.6897},
     }
 
-    import random
-
     map_records = []
     if "Ville / Quartier" in df.columns:
       for index, row in df.iterrows():
         ville_text = str(row["Ville / Quartier"])
-        base_coords = {"lat": 43.6767, "lon": 4.6278}  # Défaut Arles
+        base_coords = {"lat": 43.6767, "lon": 4.6278}
         for v_key, coords in coords_villes.items():
           if v_key.lower() in ville_text.lower():
             base_coords = coords
             break
 
-        # Ajout d'une infime variation aléatoire pour éviter que les points du même quartier se cachent entre eux
         lat_var = base_coords["lat"] + random.uniform(-0.003, 0.003)
         lon_var = base_coords["lon"] + random.uniform(-0.003, 0.003)
 
@@ -133,18 +133,16 @@ if not df.empty:
     if map_records:
       map_df = pd.DataFrame(map_records)
 
-      # Configuration de la carte Pydeck avec info-bulle au survol
       layer = pdk.Layer(
           "ScatterplotLayer",
           data=map_df,
           get_position=["lon", "lat"],
-          get_color=[255, 75, 75, 180],  # Rouge/Rose sympa
-          get_radius=250,  # Taille du point
+          get_color=[255, 75, 75, 180],
+          get_radius=250,
           pickable=True,
           auto_highlight=True,
       )
 
-      # Centrer la carte sur la première coordonnée ou sur Arles par défaut
       view_state = pdk.ViewState(
           latitude=43.6767, longitude=4.6278, zoom=11, pitch=0
       )
