@@ -58,7 +58,6 @@ if not df.empty:
     if piece_choisie != "Toutes":
       df = df[df["Pièces"] == piece_choisie]
 
-  # Calcul sécurisé du loyer max sans utiliser .isna().all() sur le DataFrame
   if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
     max_loyer_val = int(df["Loyer_Num"].max())
   else:
@@ -94,8 +93,8 @@ if not df.empty:
   with tab2:
     st.subheader("🗺️ Carte Interactive des Appartements")
     st.markdown(
-        "Survolez ou cliquez sur les points pour afficher les informations de"
-        " l'appartement (Loyer, Surface, Quartier)."
+        "Survolez un point pour voir les détails et **cliquez sur le lien de"
+        " l'annonce** dans l'infobulle pour l'ouvrir directement !"
     )
 
     coords_villes = {
@@ -120,6 +119,10 @@ if not df.empty:
         lat_var = base_coords["lat"] + random.uniform(-0.003, 0.003)
         lon_var = base_coords["lon"] + random.uniform(-0.003, 0.003)
 
+        lien_annonce = str(row.get("Lien Annonce", "#"))
+        if not lien_annonce.startswith("http"):
+          lien_annonce = "#"
+
         map_records.append({
             "lat": lat_var,
             "lon": lon_var,
@@ -128,6 +131,7 @@ if not df.empty:
             "Pièces": str(row.get("Pièces", "N/C")),
             "Quartier": ville_text,
             "Agence": str(row.get("Agence", "N/C")),
+            "Lien": lien_annonce,
         })
 
     if map_records:
@@ -154,12 +158,15 @@ if not df.empty:
               "html": (
                   "<b>Quartier :</b> {Quartier}<br><b>Loyer :</b>"
                   " {Loyer}<br><b>Surface :</b> {Surface} m²<br><b>Pièces :"
-                  "</b> {Pièces}<br><b>Agence :</b> {Agence}"
+                  "</b> {Pièces}<br><b>Agence :</b> {Agence}<br><br><a"
+                  " href='{Lien}' target='_blank' style='color: #ffcccc; font-weight:"
+                  " bold;'>🔗 Ouvrir l'annonce</a>"
               ),
               "style": {
-                  "backgroundColor": "steelblue",
+                  "backgroundColor": "#1f77b4",
                   "color": "white",
-                  "padding": "10px",
+                  "padding": "12px",
+                  "borderRadius": "5px",
               },
           },
       )
