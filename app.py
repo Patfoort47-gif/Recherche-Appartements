@@ -1,7 +1,8 @@
 import random
+import folium
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
+from streamlit_folium import st_folium
 
 # Configuration de la page
 st.set_page_config(
@@ -93,8 +94,8 @@ if not df.empty:
   with tab2:
     st.subheader("🗺️ Carte Interactive des Appartements")
     st.markdown(
-        "Survolez un point pour voir les détails et **cliquez sur le lien de"
-        " l'annonce** dans l'infobulle pour l'ouvrir directement !"
+        "Cliquez sur un marqueur pour afficher la bulle d'information, puis"
+        " **cliquez sur le lien** pour ouvrir directement l'annonce."
     )
 
     coords_villes = {
@@ -106,7 +107,9 @@ if not df.empty:
         "Mas thibert": {"lat": 43.5858, "lon": 4.6897},
     }
 
-    map_records = []
+    # Création de la carte Folium centrée sur Arles
+    m = folium.Map(location=[43.6767, 4.6278], zoom_level=11)
+
     if "Ville / Quartier" in df.columns:
       for index, row in df.iterrows():
         ville_text = str(row["Ville / Quartier"])
@@ -116,64 +119,39 @@ if not df.empty:
             base_coords = coords
             break
 
+        # Légère variation pour éviter les superpositions exactes
         lat_var = base_coords["lat"] + random.uniform(-0.003, 0.003)
         lon_var = base_coords["lon"] + random.uniform(-0.003, 0.003)
 
-        lien_annonce = str(row.get("Lien Annonce", "#"))
-        if not lien_annonce.startswith("http"):
-          lien_annonce = "#"
+        loyer = str(row.get("Loyer", "N/C"))
+        surface = str(row.get("M²", "N/C"))
+        pieces = str(row.get("Pièces", "N/C"))
+        agence = str(row.get("Agence", "N/C"))
+        lien = str(row.get("Lien Annonce", "#"))
+        if not lien.startswith("http"):
+          lien = "#"
 
-        map_records.append({
-            "lat": lat_var,
-            "lon": lon_var,
-            "Loyer": str(row.get("Loyer", "N/C")),
-            "Surface": str(row.get("M²", "N/C")),
-            "Pièces": str(row.get("Pièces", "N/C")),
-            "Quartier": ville_text,
-            "Agence": str(row.get("Agence", "N/C")),
-            "Lien": lien_annonce,
-        })
+        # Contenu HTML du pop-up qui reste affiché au clic
+        popup_html = f"""
+                <div style="font-family: sans-serif; width: 200px;">
+                    <b>{ville_text}</b><br>
+                    <b>Loyer :</b> {loyer}<br>
+                    <b>Surface :</b> {surface} m²<br>
+                    <b>Pièces :</b> {pieces}<br>
+                    <b>Agence :</b> {agence}<br><br>
+                    <a href="{lien}" target="_blank" style="background-color: #ff4b4b; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">🔗 Voir l'annonce</a>
+                </div>
+                """
 
-    if map_records:
-      map_df = pd.DataFrame(map_records)
+        folium.Marker(
+            [lat_var, lon_var],
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=f"{loyer} - {ville_text}",
+            icon=folium.Icon(color="red", icon="home", prefix="fa"),
+        ).add_to(m)
 
-      layer = pdk.Layer(
-          "ScatterplotLayer",
-          data=map_df,
-          get_position=["lon", "lat"],
-          get_color=[255, 75, 75, 180],
-          get_radius=250,
-          pickable=True,
-          auto_highlight=True,
-      )
-
-      view_state = pdk.ViewState(
-          latitude=43.6767, longitude=4.6278, zoom=11, pitch=0
-      )
-
-      r = pdk.Deck(
-          layers=[layer],
-          initial_view_state=view_state,
-          tooltip={
-              "html": (
-                  "<b>Quartier :</b> {Quartier}<br><b>Loyer :</b>"
-                  " {Loyer}<br><b>Surface :</b> {Surface} m²<br><b>Pièces :"
-                  "</b> {Pièces}<br><b>Agence :</b> {Agence}<br><br><a"
-                  " href='{Lien}' target='_blank' style='color: #ffcccc; font-weight:"
-                  " bold;'>🔗 Ouvrir l'annonce</a>"
-              ),
-              "style": {
-                  "backgroundColor": "#1f77b4",
-                  "color": "white",
-                  "padding": "12px",
-                  "borderRadius": "5px",
-              },
-          },
-      )
-
-      st.pydeck_chart(r)
-    else:
-      st.info("Aucune donnée géographique disponible pour afficher la carte.")
+    # Affichage de la carte dans Streamlit
+    st_folium(m, width=1200, height=550)
 
   with tab3:
     st.subheader("➕ Ajouter un nouvel appartement")
