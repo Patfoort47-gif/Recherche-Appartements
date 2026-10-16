@@ -1,6 +1,5 @@
 import random
 import folium
-import gspread
 import pandas as pd
 import streamlit as st
 from streamlit_folium import folium_static
@@ -12,47 +11,23 @@ st.set_page_config(
     layout="wide",
 )
 
-SPREADSHEET_NAME = "Appartements Arles"
+# URL d'export CSV public de votre Google Sheet
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1kaozoe4IX09695Ibf-Cl99x3B0O_BSq954lCS_889xo/export?format=csv&gid=0"
 
 
-# Connexion directe via le fichier JSON présent à la racine du projet
-@st.cache_resource
-def init_connection():
+@st.cache_data(ttl=60)
+def load_data():
   try:
-    gc = gspread.service_account(filename="gcp_service_account.json")
-    spreadsheet = gc.open(SPREADSHEET_NAME)
-    return spreadsheet
+    df = pd.read_csv(SHEET_URL)
+    return df
   except Exception as e:
-    st.error(f"Détail technique de l'erreur Google Sheets : {e}")
-    return None
+    st.error(f"Erreur lors du chargement du Google Sheet : {e}")
+    return pd.DataFrame()
 
 
-spreadsheet = init_connection()
+df = load_data()
 
-
-@st.cache_data(ttl=10)
-def load_data_from_sheet():
-  if spreadsheet:
-    try:
-      sheet = spreadsheet.worksheet("Listing")
-      data = sheet.get_all_records()
-      return pd.DataFrame(data)
-    except Exception:
-      # Fallback sur la première feuille si "Listing" échoue
-      try:
-        sheet = spreadsheet.get_worksheet(0)
-        data = sheet.get_all_records()
-        return pd.DataFrame(data)
-      except Exception:
-        pass
-  # Fallback par défaut si pas de connexion API active
-  fallback_url = "https://docs.google.com/spreadsheets/d/1kaozoe4IX09695Ibf-Cl99x3B0O_BSq954lCS_889xo/export?format=csv&gid=0"
-  return pd.read_csv(fallback_url)
-
-
-df = load_data_from_sheet()
-
-# Style CSS 100% Mode Sombre soigné (sans blocs blancs parasites)
+# Style CSS Mode Sombre épuré
 st.markdown(
     """
     <style>
@@ -182,48 +157,20 @@ if not df.empty:
   st.markdown("<br>", unsafe_allow_html=True)
 
   # --- ONGLETS ---
-  tab1, tab2, tab3, tab4 = st.tabs(
+  tab1, tab2, tab3 = st.tabs(
       [
-          "📋 Tableau & Modifications",
+          "📋 Tableau des Annonces",
           "📅 Planning des RDV",
           "🗺️ Carte Interactive",
-          "➕ Ajouter un bien",
       ]
   )
 
   with tab1:
-    st.subheader("📋 Tableau interactif des annonces")
-    st.markdown(
-        "Modifiez vos données ci-dessous et cliquez sur le bouton de"
-        " synchronisation pour enregistrer les changements dans le Google"
-        " Sheet."
-    )
-
-    edited_df = st.data_editor(
+    st.subheader("📋 Liste des appartements")
+    st.dataframe(
         df.drop(columns=["Loyer_Num"], errors="ignore"),
         use_container_width=True,
-        num_rows="dynamic",
-        key="main_editor",
     )
-
-    if st.button("💾 Enregistrer les modifications dans le Google Sheet"):
-      if spreadsheet:
-        try:
-          sheet = spreadsheet.worksheet("Listing")
-          # Nettoyage et mise à jour de la feuille Google Sheet
-          data_to_save = edited_df.fillna("").values.tolist()
-          header = list(edited_df.columns)
-          sheet.clear()
-          sheet.update([header] + data_to_save)
-          st.success(" Modifications enregistrées avec succès dans Google Sheets !")
-          st.cache_data.clear()
-        except Exception as e:
-          st.error(f"Erreur lors de la synchronisation : {e}")
-      else:
-        st.error(
-            "Connexion API Google Sheets non active. Vérifiez vos secrets"
-            " Streamlit."
-        )
 
   with tab2:
     st.subheader("📅 Planning des RDV et Visites confirmées")
@@ -301,79 +248,3 @@ if not df.empty:
                     <b>Loyer :</b> {loyer}<br>
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
-                    <b>Agence :</b> {agence}<br><br>
-                    <a href="{lien}" target="_blank" style="background-color: #ef4444; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold; text-align: center;">🔗 Voir l'annonce</a>
-                </div>
-                """
-
-        folium.Marker(
-            [lat_var, lon_var],
-            popup=folium.Popup(popup_html, max_width=300),
-            tooltip=f"{loyer} - {ville_text}",
-            icon=folium.Icon(color="red", icon="home", prefix="fa"),
-        ).add_to(m)
-
-    # Affichage de la carte propre sans conteneur blanc parasite au-dessus
-    folium_static(m, width=1150, height=550)
-
-  with tab4:
-    st.subheader("➕ Ajouter un nouvel appartement")
-    st.markdown(
-        "Remplissez le formulaire pour ajouter directement l'appartement dans"
-        " votre Google Sheet."
-    )
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    with st.form("ajout_form", clear_on_submit=True):
-      c1, c2, c3 = st.columns(3)
-      with c1:
-        n_loyer = st.text_input("Loyer (ex: 690€)")
-        n_m2 = st.text_input("Surface (M²)")
-        n_pieces = st.text_input("Pièces (ex: 3 Pièces)")
-      with c2:
-        n_ville = st.text_input("Ville / Quartier")
-        n_lien = st.text_input("Lien de l'annonce")
-        n_agence = st.text_input("Agence ou Particulier")
-      with c3:
-        n_nono = st.text_input("Avis Nono")
-        n_victor = st.text_input("Avis Victor")
-        n_rdv = st.text_input("RDV pris ?")
-
-      submitted = st.form_submit_button(
-          "Ajouter l'appartement au Google Sheet"
-      )
-
-      if submitted:
-        if spreadsheet:
-          try:
-            sheet = spreadsheet.worksheet("Listing")
-            # Création du nouveau ID automatique
-            new_id = len(df) + 1
-            new_row = [
-                new_id,
-                n_loyer,
-                n_m2,
-                n_pieces,
-                n_ville,
-                n_lien,
-                n_agence,
-                n_nono,
-                n_victor,
-                "",
-                "",
-                n_rdv,
-                "",
-            ]
-            sheet.append_row(new_row)
-            st.success(
-                "Appartement ajouté avec succès et synchronisé dans le Google"
-                " Sheet !"
-            )
-            st.cache_data.clear()
-          except Exception as e:
-            st.error(f"Erreur lors de l'ajout : {e}")
-        else:
-          st.error("Connexion Google Sheets non configurée.")
-
-else:
-  st.warning("Impossible de charger les données.")
