@@ -1,4 +1,4 @@
-import random
+import math
 from urllib.parse import quote
 import folium
 import pandas as pd
@@ -30,20 +30,17 @@ def load_data():
 df = load_data()
 
 
-# Géocodage robuste avec dictionnaire local enrichi pour éviter les pertes de points
-def get_lat_lon(query_str, index_row=0):
+# Géocodage précis privilégiant l'API pour les adresses exactes
+@st.cache_data(ttl=3600)
+def get_lat_lon(query_str):
   if not query_str or pd.isna(query_str):
-    # Repli avec décalage unique basé sur l'index pour ne pas superposer
-    return 43.6767 + (index_row * 0.001), 4.6278 + (index_row * 0.001)
+    return 43.6767, 4.6278  # Centre par défaut (Arles)
 
   query_str = str(query_str).strip()
   query_lower = query_str.lower()
 
-  # Base locale des rues, quartiers et villes pour un affichage instantané et garanti
-  lieux_fixes = {
-      "fernand benoît": {"lat": 43.6775, "lon": 4.6285},
-      "fernand benoit": {"lat": 43.6775, "lon": 4.6285},
-      "anatole france": {"lat": 43.6815, "lon": 4.4330},
+  # Villes et quartiers de référence de secours
+  villes_fixes = {
       "saint-gilles": {"lat": 43.6811, "lon": 4.4328},
       "arles": {"lat": 43.6767, "lon": 4.6278},
       "bellegarde": {"lat": 43.7533, "lon": 4.5158},
@@ -55,32 +52,34 @@ def get_lat_lon(query_str, index_row=0):
       "griffeuille": {"lat": 43.6680, "lon": 4.6380},
   }
 
-  for k, coords in lieux_fixes.items():
-    if k in query_lower:
-      # Ajout d'un micro-décalage unique par index pour différencier les biens d'un même secteur
-      return coords["lat"] + (index_row * 0.0003), coords["lon"] + (
-          index_row * 0.0003
-      )
+  # Si c'est juste un nom de ville sans numéro de rue, on utilise la base fixe directement
+  if query_lower in villes_fixes and not any(
+      char.isdigit() for char in query_str
+  ):
+    return villes_fixes[query_lower]["lat"], villes_fixes[query_lower]["lon"]
 
-  # Tentative de géocodage externe si non trouvé dans la base locale
+  # Interrogation de l'API Nominatim pour les adresses précises
+  search_query = (
+      query_str if "france" in query_lower else f"{query_str}, France"
+  )
+  url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
+
   try:
-    search_query = (
-        query_str if "france" in query_lower else f"{query_str}, France"
-    )
-    url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
-    headers = {"User-Agent": "AppartementSearchApp/4.0"}
-    response = requests.get(url, headers=headers, timeout=2)
+    headers = {"User-Agent": "AppartementSearchApp/6.0"}
+    response = requests.get(url, headers=headers, timeout=3)
     if response.status_code == 200:
       data = response.json()
       if data:
-        return float(data[0]["lat"]) + (index_row * 0.0003), float(
-            data[0]["lon"]
-        ) + (index_row * 0.0003)
+        return float(data[0]["lat"]), float(data[0]["lon"])
   except Exception:
     pass
 
-  # Dernier repli garanti autour d'Arles avec décalage
-  return 43.6767 + (index_row * 0.001), 4.6278 + (index_row * 0.001)
+  # Repli sur le dictionnaire si l'API échoue
+  for k, coords in villes_fixes.items():
+    if k in query_lower:
+      return coords["lat"], coords["lon"]
+
+  return 43.6767, 4.6278
 
 
 # Style CSS Mode Sombre épuré
@@ -266,17 +265,28 @@ if not df.empty:
 
   with tab3:
     st.subheader(
-        "🗺️ Carte Interactive (Points garantis & Anti-superposition)"
+        "🗺️ Carte Interactive (Adresses exactes & Répartition naturelle)"
     )
 
     m = folium.Map(location=[43.6767, 4.6278], zoom_level=12, control_scale=True)
 
     if "Ville / Quartier" in df.columns:
-      for index, row in df.iterrows():
-        lieu_text = row.get("Ville / Quartier", "")
+      coord_counts = {}
 
-        # Appel avec l'index de la ligne pour garantir un point unique et distinct
-        lat, lon = get_lat_lon(lieu_text, index_row=index)
+      for index, row in df.iterrows():
+        lieu_text = str(row["Ville / Quartier"])
+        lat, lon = get_lat_lon(lieu_text)
+
+        # Empêche la superposition exacte en répartissant les doublons en cercle naturel
+        coord_key = (round(lat, 4), round(lon, 4))
+        if coord_key in coord_counts:
+          coord_counts[coord_key] += 1
+          angle = coord_counts[coord_key] * 2.399
+          r = 0.00035 * math.sqrt(coord_counts[coord_key])
+          lat += r * math.cos(angle)
+          lon += r * math.sin(angle)
+        else:
+          coord_counts[coord_key] = 0
 
         loyer = str(row.get("Loyer", "N/C"))
         surface = str(row.get("M²", "N/C"))
