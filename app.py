@@ -1,6 +1,7 @@
-import random
+from urllib.parse import quote
 import folium
 import pandas as pd
+import requests
 import streamlit as st
 from streamlit_folium import folium_static
 
@@ -26,6 +27,35 @@ def load_data():
 
 
 df = load_data()
+
+
+# Fonction intelligente de géocodage pour trouver les coordonnées exactes d'une adresse ou d'un quartier
+@st.cache_data(ttl=3600)
+def get_lat_lon(query_str):
+  if not query_str or pd.isna(query_str):
+    return 43.6767, 4.6278  # Défaut : Arles centre
+
+  # On complète avec "Arles" ou la région si l'utilisateur met juste un nom de quartier
+  search_query = (
+      str(query_str)
+      if "arles" in str(query_str).lower()
+      else f"{query_str}, Arles, France"
+  )
+  url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
+
+  try:
+    headers = {"User-Agent": "AppartementSearchApp/1.0"}
+    response = requests.get(url, headers=headers, timeout=3)
+    if response.status_code == 200:
+      data = response.json()
+      if data:
+        return float(data[0]["lat"]), float(data[0]["lon"])
+  except Exception:
+    pass
+
+  # Coordonnées de repli par défaut (centre d'Arles) si non trouvé
+  return 43.6767, 4.6278
+
 
 # Style CSS Mode Sombre épuré
 st.markdown(
@@ -209,30 +239,18 @@ if not df.empty:
       st.info("Aucun rendez-vous n'est actuellement renseigné.")
 
   with tab3:
-    st.subheader("🗺️ Carte Interactive des Appartements")
+    st.subheader(
+        "🗺️ Carte Interactive (Géocodage précis des adresses et quartiers)"
+    )
 
-    coords_villes = {
-        "Arles": {"lat": 43.6767, "lon": 4.6278},
-        "Saint-Gilles": {"lat": 43.6811, "lon": 4.4328},
-        "Bellegarde": {"lat": 43.7533, "lon": 4.5158},
-        "Garons": {"lat": 43.7844, "lon": 4.4372},
-        "Fourques": {"lat": 43.6822, "lon": 4.6033},
-        "Mas thibert": {"lat": 43.5858, "lon": 4.6897},
-    }
-
-    m = folium.Map(location=[43.6767, 4.6278], zoom_level=11, control_scale=True)
+    m = folium.Map(location=[43.6767, 4.6278], zoom_level=12, control_scale=True)
 
     if "Ville / Quartier" in df.columns:
       for index, row in df.iterrows():
-        ville_text = str(row["Ville / Quartier"])
-        base_coords = {"lat": 43.6767, "lon": 4.6278}
-        for v_key, coords in coords_villes.items():
-          if v_key.lower() in ville_text.lower():
-            base_coords = coords
-            break
+        lieu_text = str(row["Ville / Quartier"])
 
-        lat_var = base_coords["lat"] + random.uniform(-0.003, 0.003)
-        lon_var = base_coords["lon"] + random.uniform(-0.003, 0.003)
+        # Récupération des coordonnées réelles et précises via le géocodeur
+        lat, lon = get_lat_lon(lieu_text)
 
         loyer = str(row.get("Loyer", "N/C"))
         surface = str(row.get("M²", "N/C"))
@@ -244,7 +262,7 @@ if not df.empty:
 
         popup_html = f"""
                 <div style="font-family: sans-serif; width: 210px; color: #333;">
-                    <b style="color: #111; font-size: 14px;">{ville_text}</b><hr style="margin: 5px 0;">
+                    <b style="color: #111; font-size: 14px;">{lieu_text}</b><hr style="margin: 5px 0;">
                     <b>Loyer :</b> {loyer}<br>
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
@@ -253,14 +271,25 @@ if not df.empty:
                 </div>
                 """
 
+        # Ajout d'un cercle de surbrillance autour de la zone/quartier pour mieux repérer le secteur
+        folium.Circle(
+            location=[lat, lon],
+            radius=250,  # Rayon en mètres de la zone en surbrillance
+            color="#ef4444",
+            fill=True,
+            fill_color="#ef4444",
+            fill_opacity=0.15,
+            weight=1,
+        ).add_to(m)
+
+        # Marqueur précis de l'emplacement
         folium.Marker(
-            [lat_var, lon_var],
+            [lat, lon],
             popup=folium.Popup(popup_html, max_width=300),
-            tooltip=f"{loyer} - {ville_text}",
+            tooltip=f"{loyer} - {lieu_text}",
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
-    # Affichage propre de la carte sans bloc vide au-dessus
     folium_static(m, width=1150, height=550)
 
 else:
