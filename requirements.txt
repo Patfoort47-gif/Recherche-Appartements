@@ -3,3 +3,5 @@ pandas
 folium
 streamlit-folium
 pydeck
+gspread
+oauth2client
