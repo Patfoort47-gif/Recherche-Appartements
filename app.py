@@ -1,7 +1,6 @@
-from urllib.parse import quote
+import random
 import folium
 import pandas as pd
-import requests
 import streamlit as st
 from streamlit_folium import folium_static
 
@@ -27,35 +26,6 @@ def load_data():
 
 
 df = load_data()
-
-
-# Fonction intelligente de géocodage pour trouver les coordonnées exactes d'une adresse ou d'un quartier
-@st.cache_data(ttl=3600)
-def get_lat_lon(query_str):
-  if not query_str or pd.isna(query_str):
-    return 43.6767, 4.6278  # Défaut : Arles centre
-
-  # On complète avec "Arles" ou la région si l'utilisateur met juste un nom de quartier
-  search_query = (
-      str(query_str)
-      if "arles" in str(query_str).lower()
-      else f"{query_str}, Arles, France"
-  )
-  url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
-
-  try:
-    headers = {"User-Agent": "AppartementSearchApp/1.0"}
-    response = requests.get(url, headers=headers, timeout=3)
-    if response.status_code == 200:
-      data = response.json()
-      if data:
-        return float(data[0]["lat"]), float(data[0]["lon"])
-  except Exception:
-    pass
-
-  # Coordonnées de repli par défaut (centre d'Arles) si non trouvé
-  return 43.6767, 4.6278
-
 
 # Style CSS Mode Sombre épuré
 st.markdown(
@@ -240,17 +210,42 @@ if not df.empty:
 
   with tab3:
     st.subheader(
-        "🗺️ Carte Interactive (Géocodage précis des adresses et quartiers)"
+        "🗺️ Carte Interactive & Zones de Quartiers en Surbrillance"
     )
+
+    # Dictionnaire de référence précis des quartiers et zones d'Arles et alentours
+    # Vous pouvez ajuster ou ajouter des quartiers ici facilement
+    coords_quartiers = {
+        "centre": {"lat": 43.6767, "lon": 4.6278},
+        "rives de la roubine": {"lat": 43.6820, "lon": 4.6310},
+        "trinquetaille": {"lat": 43.6785, "lon": 4.6200},
+        "barousse": {"lat": 43.6710, "lon": 4.6350},
+        "monplaisir": {"lat": 43.6850, "lon": 4.6250},
+        "griffeuille": {"lat": 43.6680, "lon": 4.6380},
+        "salières": {"lat": 43.6730, "lon": 4.6150},
+        "saint-gilles": {"lat": 43.6811, "lon": 4.4328},
+        "bellegarde": {"lat": 43.7533, "lon": 4.5158},
+        "garons": {"lat": 43.7844, "lon": 4.4372},
+        "fourques": {"lat": 43.6822, "lon": 4.6033},
+        "mas thibert": {"lat": 43.5858, "lon": 4.6897},
+    }
 
     m = folium.Map(location=[43.6767, 4.6278], zoom_level=12, control_scale=True)
 
     if "Ville / Quartier" in df.columns:
       for index, row in df.iterrows():
-        lieu_text = str(row["Ville / Quartier"])
+        lieu_text = str(row["Ville / Quartier"]).lower()
 
-        # Récupération des coordonnées réelles et précises via le géocodeur
-        lat, lon = get_lat_lon(lieu_text)
+        # Recherche de correspondance dans le dictionnaire des quartiers
+        base_coords = {"lat": 43.6767, "lon": 4.6278}  # Centre par défaut
+        for q_key, coords in coords_quartiers.items():
+          if q_key in lieu_text:
+            base_coords = coords
+            break
+
+        # Petit décalage intelligent pour éviter que deux appas du même quartier se superposent exactement
+        lat_var = base_coords["lat"] + random.uniform(-0.0015, 0.0015)
+        lon_var = base_coords["lon"] + random.uniform(-0.0015, 0.0015)
 
         loyer = str(row.get("Loyer", "N/C"))
         surface = str(row.get("M²", "N/C"))
@@ -262,7 +257,7 @@ if not df.empty:
 
         popup_html = f"""
                 <div style="font-family: sans-serif; width: 210px; color: #333;">
-                    <b style="color: #111; font-size: 14px;">{lieu_text}</b><hr style="margin: 5px 0;">
+                    <b style="color: #111; font-size: 14px;">{row.get('Ville / Quartier')}</b><hr style="margin: 5px 0;">
                     <b>Loyer :</b> {loyer}<br>
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
@@ -271,22 +266,22 @@ if not df.empty:
                 </div>
                 """
 
-        # Ajout d'un cercle de surbrillance autour de la zone/quartier pour mieux repérer le secteur
+        # Cercle de surbrillance pour matérialiser le secteur / quartier autour du bien
         folium.Circle(
-            location=[lat, lon],
-            radius=250,  # Rayon en mètres de la zone en surbrillance
+            location=[lat_var, lon_var],
+            radius=300,  # Rayon de la zone en surbrillance (en mètres)
             color="#ef4444",
             fill=True,
             fill_color="#ef4444",
-            fill_opacity=0.15,
-            weight=1,
+            fill_opacity=0.2,
+            weight=1.5,
         ).add_to(m)
 
-        # Marqueur précis de l'emplacement
+        # Marqueur de la maison/appartement
         folium.Marker(
-            [lat, lon],
+            [lat_var, lon_var],
             popup=folium.Popup(popup_html, max_width=300),
-            tooltip=f"{loyer} - {lieu_text}",
+            tooltip=f"{loyer} - {row.get('Ville / Quartier')}",
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
