@@ -27,11 +27,8 @@ def load_data():
 
 df = load_data()
 
-st.title("🏡 Super Suivi de Recherche d'Appartements")
-st.markdown(
-    "Application collaborative pour suivre, filtrer, cartographier et gérer"
-    " vos visites à deux !"
-)
+st.title("🏡 Suivi de Recherche d'Appartements")
+st.markdown("Organisez, visitez et suivez vos coups de cœur à deux en toute simplicité.")
 
 if not df.empty:
   # Nettoyage sécurisé du loyer pour les filtres
@@ -45,7 +42,7 @@ if not df.empty:
     df["Loyer_Num"] = pd.to_numeric(df["Loyer_Num"], errors="coerce")
 
   # --- BARRE LATÉRALE DE FILTRES ---
-  st.sidebar.header("🔍 Filtres & Paramètres")
+  st.sidebar.header("🔍 Filtres & Recherche")
 
   if "Ville / Quartier" in df.columns:
     villes = ["Toutes"] + list(df["Ville / Quartier"].dropna().unique())
@@ -68,22 +65,31 @@ if not df.empty:
   if "Loyer_Num" in df.columns:
     df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
-  # --- KPIs ---
-  col1, col2, col3, col4 = st.columns(4)
+  # --- KPIs ÉPURÉS ---
+  col1, col2 = st.columns(2)
   col1.metric("Annonces affichées", len(df))
   if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
     loyer_moyen = int(df["Loyer_Num"].mean())
     col2.metric("Loyer Moyen", f"{loyer_moyen} €")
-  col3.metric("Visites / RDV", "À suivre")
-  col4.metric("Mode", "Collaboratif 👥")
 
-  # --- ONGLETS ---
-  tab1, tab2, tab3 = st.tabs(
-      ["📋 Tableau & Modifications", "🗺️ Carte Interactive", "➕ Ajouter un bien"]
+  st.markdown("---")
+
+  # --- ONGLETS PRINCIPAUX ---
+  tab1, tab2, tab3, tab4 = st.tabs(
+      [
+          "📋 Tableau & Modifications",
+          "📅 Suivi des RDV & Visites",
+          "🗺️ Carte Interactive",
+          "➕ Ajouter un bien",
+      ]
   )
 
   with tab1:
     st.subheader("Tableau interactif des annonces")
+    st.info(
+        "💡 Modifiez directement les informations dans le tableau ci-dessous si"
+        " besoin."
+    )
     st.data_editor(
         df.drop(columns=["Loyer_Num"], errors="ignore"),
         use_container_width=True,
@@ -92,10 +98,54 @@ if not df.empty:
     )
 
   with tab2:
+    st.subheader("📅 Planning des RDV et Visites")
+    st.markdown(
+        "Retrouvez ici uniquement les appartements pour lesquels un"
+        " rendez-vous ou une visite est planifié."
+    )
+
+    # Filtrage des lignes ayant un RDV ou une information de visite
+    rdv_col = "RDV pris ?" if "RDV pris ?" in df.columns else None
+    rep_col = "Réponse" if "Réponse" in df.columns else None
+
+    df_rdv = pd.DataFrame()
+    if rdv_col and rep_col:
+      # On filtre les lignes où le champ RDV n'est pas vide OU contient des mots clés de visite dans réponse
+      df_rdv = df[
+          df[rdv_col].notna()
+          & (df[rdv_col].astype(str).str.strip() != "")
+          | df[rep_col].astype(str).str.lower().str.contains("visite|rdv|lundi|samedi|mardi|mercredi|jeudi|vendredi|dimanche")
+      ]
+
+    if not df_rdv.empty:
+      for index, row in df_rdv.iterrows():
+        with st.container():
+          col_a, col_b = st.columns([3, 1])
+          with col_a:
+            st.markdown(f"### 🏠 {row.get('Ville / Quartier', 'Appartement')}")
+            st.write(f"**Loyer :** {row.get('Loyer', 'N/C')} | **Surface :** {row.get('M²')} m² | **Pièces :** {row.get('Pièces')}")
+            st.write(f"**Agence / Contact :** {row.get('Agence', 'N/C')}")
+            if pd.notna(row.get('RDV pris ?')) and str(row.get('RDV pris ?')).strip() != '':
+              st.success(f"**📅 RDV :** {row.get('RDV pris ?')}")
+            if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '':
+              st.info(f"**💬 Notes / Réponse :** {row.get('Réponse')}")
+          with col_b:
+            lien = row.get('Lien Annonce', '#')
+            if pd.notna(lien) and str(lien).startswith('http'):
+              st.markdown(f"<br><a href='{lien}' target='_blank' style='background-color: #ff4b4b; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold;'>🔗 Voir l'annonce</a>", unsafe_allow_html=True)
+          st.markdown("---")
+    else:
+      st.info(
+          "Aucun rendez-vous n'est actuellement renseigné dans le tableau."
+          " Remplissez la colonne 'RDV pris ?' dans votre Google Sheet ou le"
+          " tableau pour les voir apparaître ici !"
+      )
+
+  with tab3:
     st.subheader("🗺️ Carte Interactive des Appartements")
     st.markdown(
-        "Cliquez sur un marqueur pour afficher les informations, puis cliquez"
-        " sur le bouton pour ouvrir l'annonce."
+        "Cliquez sur un marqueur pour afficher les informations et accéder au"
+        " lien."
     )
 
     coords_villes = {
@@ -107,7 +157,6 @@ if not df.empty:
         "Mas thibert": {"lat": 43.5858, "lon": 4.6897},
     }
 
-    # Création de la carte Folium
     m = folium.Map(location=[43.6767, 4.6278], zoom_level=11, control_scale=True)
 
     if "Ville / Quartier" in df.columns:
@@ -148,10 +197,9 @@ if not df.empty:
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
-    # Utilisation de folium_static pour bloquer les boucles de rechargement intempestives
     folium_static(m, width=1100, height=550)
 
-  with tab3:
+  with tab4:
     st.subheader("➕ Ajouter un nouvel appartement")
     with st.form("ajout_appartement_form"):
       c1, c2, c3 = st.columns(3)
