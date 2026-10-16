@@ -27,26 +27,26 @@ def load_data():
 
 df = load_data()
 
-# Style CSS personnalisé pour des KPIs bien visibles, un tableau élégant et un design pro
+# Style CSS 100% optimisé Mode Sombre (Dark Mode élégant et lisible)
 st.markdown(
     """
     <style>
     .main {
-        background-color: #f4f6f9;
+        background-color: #0e1117;
     }
-    /* Style des cartes KPI */
+    /* Style des cartes KPI en mode sombre */
     .kpi-card {
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        background: linear-gradient(135deg, #1f2937 100%, #111827 0%);
         padding: 24px;
         border-radius: 14px;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.06);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         text-align: center;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #374151;
         margin-bottom: 20px;
     }
     .kpi-title {
-        font-size: 15px;
-        color: #64748b;
+        font-size: 14px;
+        color: #9ca3af;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -54,28 +54,28 @@ st.markdown(
     }
     .kpi-value {
         font-size: 36px;
-        color: #1e293b;
+        color: #f9fafb;
         font-weight: 800;
     }
-    /* Style des cartes RDV */
+    /* Style des cartes RDV en mode sombre */
     .rdv-card {
-        background-color: #ffffff;
+        background-color: #1f2937;
         padding: 22px;
         border-radius: 12px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         margin-bottom: 15px;
-        border-left: 6px solid #ff4b4b;
-        border-top: 1px solid #edf2f7;
-        border-right: 1px solid #edf2f7;
-        border-bottom: 1px solid #edf2f7;
+        border-left: 6px solid #ef4444;
+        border-top: 1px solid #374151;
+        border-right: 1px solid #374151;
+        border-bottom: 1px solid #374151;
     }
-    /* Conteneur de la carte */
+    /* Conteneur de la carte en mode sombre */
     .map-container {
-        background-color: #ffffff;
+        background-color: #1f2937;
         padding: 15px;
         border-radius: 14px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        border: 1px solid #374151;
     }
     </style>
 """,
@@ -98,8 +98,14 @@ if not df.empty:
     )
     df["Loyer_Num"] = pd.to_numeric(df["Loyer_Num"], errors="coerce")
 
-  # --- BARRE LATÉRALE DE FILTRES ---
+  # --- BARRE LATÉRALE DE FILTRES AMÉLIORÉE ---
   st.sidebar.header("🔍 Filtres & Recherche")
+
+  # Recherche textuelle rapide (par agence, ville ou mots-clés)
+  recherche_texte = st.sidebar.text_input(
+      "Recherche rapide (Mot-clé)",
+      placeholder="Ex: Le Pain, Agence, Centre...",
+  )
 
   if "Ville / Quartier" in df.columns:
     villes = ["Toutes"] + list(df["Ville / Quartier"].dropna().unique())
@@ -124,7 +130,14 @@ if not df.empty:
   if "Loyer_Num" in df.columns:
     df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
-  # --- GROS KPIs VISUELS ---
+  # Application du filtre textuel s'il est rempli
+  if recherche_texte:
+    mask = df.astype(str).apply(
+        lambda x: x.str.contains(recherche_texte, case=False, na=False)
+    ).any(axis=1)
+    df = df[mask]
+
+  # --- GROS KPIs VISUELS (MODE SOMBRE) ---
   col_kpi1, col_kpi2 = st.columns(2)
 
   nb_annonces = len(df)
@@ -172,7 +185,7 @@ if not df.empty:
     st.subheader("📋 Tableau interactif des annonces")
     st.markdown(
         "Modifiez directement vos notes, avis ou statuts dans le tableau"
-        " ci-dessous pour garder un suivi impeccable."
+        " ci-dessous."
     )
     st.markdown("<br>", unsafe_allow_html=True)
     st.data_editor(
@@ -205,18 +218,18 @@ if not df.empty:
         lien = row.get("Lien Annonce", "#")
         btn_html = ""
         if pd.notna(lien) and str(lien).startswith("http"):
-          btn_html = f"<a href='{lien}' target='_blank' style='background-color: #ff4b4b; color: white; padding: 8px 14px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; float: right;'>🔗 Voir l'annonce</a>"
+          btn_html = f"<a href='{lien}' target='_blank' style='background-color: #ef4444; color: white; padding: 8px 14px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; float: right;'>🔗 Voir l'annonce</a>"
 
         st.markdown(
             f"""
                 <div class="rdv-card">
                     {btn_html}
-                    <h3 style="margin-top:0; color: #1e293b;">🏠 {row.get('Ville / Quartier', 'Appartement')}</h3>
-                    <p style="margin: 6px 0; color: #475569;"><b>💰 Loyer :</b> {row.get('Loyer', 'N/C')} | <b>📐 Surface :</b> {row.get('M²')} m² | <b>🚪 Pièces :</b> {row.get('Pièces')}</p>
-                    <p style="margin: 6px 0; color: #475569;"><b>🏢 Agence / Contact :</b> {row.get('Agence', 'N/C')}</p>
-                    <hr style="margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;">
-                    <p style="margin: 6px 0; color: #16a34a; font-size: 16px;"><b>📅 RDV :</b> {row.get('RDV pris ?')}</p>
-                    {"<p style='margin: 6px 0; color: #334155;'><b>💬 Notes :</b> " + str(row.get('Réponse')) + "</p>" if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '' else ""}
+                    <h3 style="margin-top:0; color: #f9fafb;">🏠 {row.get('Ville / Quartier', 'Appartement')}</h3>
+                    <p style="margin: 6px 0; color: #9ca3af;"><b>💰 Loyer :</b> {row.get('Loyer', 'N/C')} | <b>📐 Surface :</b> {row.get('M²')} m² | <b>🚪 Pièces :</b> {row.get('Pièces')}</p>
+                    <p style="margin: 6px 0; color: #9ca3af;"><b>🏢 Agence / Contact :</b> {row.get('Agence', 'N/C')}</p>
+                    <hr style="margin: 12px 0; border: none; border-top: 1px solid #374151;">
+                    <p style="margin: 6px 0; color: #4ade80; font-size: 16px;"><b>📅 RDV :</b> {row.get('RDV pris ?')}</p>
+                    {"<p style='margin: 6px 0; color: #d1d5db;'><b>💬 Notes :</b> " + str(row.get('Réponse')) + "</p>" if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '' else ""}
                 </div>
                 """,
             unsafe_allow_html=True,
@@ -268,13 +281,13 @@ if not df.empty:
           lien = "#"
 
         popup_html = f"""
-                <div style="font-family: sans-serif; width: 210px;">
-                    <b style="color: #1e293b; font-size: 14px;">{ville_text}</b><hr style="margin: 5px 0;">
+                <div style="font-family: sans-serif; width: 210px; color: #333;">
+                    <b style="color: #111; font-size: 14px;">{ville_text}</b><hr style="margin: 5px 0;">
                     <b>Loyer :</b> {loyer}<br>
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
                     <b>Agence :</b> {agence}<br><br>
-                    <a href="{lien}" target="_blank" style="background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold; text-align: center;">🔗 Voir l'annonce</a>
+                    <a href="{lien}" target="_blank" style="background-color: #ef4444; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold; text-align: center;">🔗 Voir l'annonce</a>
                 </div>
                 """
 
@@ -285,7 +298,7 @@ if not df.empty:
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
-    # Affichage de la carte dans un conteneur soigné
+    # Conteneur propre et sombre pour la carte
     st.markdown('<div class="map-container">', unsafe_allow_html=True)
     folium_static(m, width=1100, height=550)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -293,12 +306,12 @@ if not df.empty:
   with tab4:
     st.subheader("➕ Ajouter un nouvel appartement")
     st.markdown(
-        "Remplissez les informations ci-dessous pour générer la ligne à ajouter"
-        " à votre Google Sheet."
+        "Remplissez les informations ci-dessous pour générer proprement la ligne"
+        " à copier dans votre Google Sheet."
     )
     st.markdown("<br>", unsafe_allow_html=True)
 
-    with st.form("ajout_appartement_form"):
+    with st.form("ajout_appartement_form", clear_on_submit=False):
       c1, c2, c3 = st.columns(3)
       with c1:
         f_loyer = st.text_input("Loyer (ex: 690€)")
@@ -317,8 +330,8 @@ if not df.empty:
 
       if submitted:
         st.success(
-            "Appartement validé ! Vous pouvez copier ces informations et les"
-            " coller tout en bas de votre Google Sheet partagé."
+            "Appartement validé ! Copiez le bloc ci-dessous et collez-le à la"
+            " fin de votre Google Sheet."
         )
         st.code(
             f"Loyer: {f_loyer} | M²: {f_m2} | Pièces: {f_pieces} | Ville:"
