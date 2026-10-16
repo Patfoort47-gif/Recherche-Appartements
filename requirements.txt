@@ -5,3 +5,4 @@ streamlit-folium
 pydeck
 gspread
 oauth2client
+requests
