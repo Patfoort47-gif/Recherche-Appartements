@@ -248,3 +248,20 @@ if not df.empty:
                     <b>Loyer :</b> {loyer}<br>
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
+                    <b>Agence :</b> {agence}<br><br>
+                    <a href="{lien}" target="_blank" style="background-color: #ef4444; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold; text-align: center;">🔗 Voir l'annonce</a>
+                </div>
+                """
+
+        folium.Marker(
+            [lat_var, lon_var],
+            popup=folium.Popup(popup_html, max_width=300),
+            tooltip=f"{loyer} - {ville_text}",
+            icon=folium.Icon(color="red", icon="home", prefix="fa"),
+        ).add_to(m)
+
+    # Affichage propre de la carte sans bloc vide au-dessus
+    folium_static(m, width=1150, height=550)
+
+else:
+  st.warning("Impossible de charger les données.")
