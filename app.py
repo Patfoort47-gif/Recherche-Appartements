@@ -20,21 +20,8 @@ SPREADSHEET_NAME = "Appartements Arles"
 @st.cache_resource
 def init_connection():
   try:
-    # Récupération des secrets
-    secrets_dict = dict(st.secrets["gcp_service_account"])
-
-    # Nettoyage rigoureux de la clé privée pour éliminer les problèmes de padding et de \n littéraux
-    if "private_key" in secrets_dict:
-      pk = secrets_dict["private_key"]
-      # S'assure que les retours à la ligne sont des vrais caractères de fin de ligne
-      pk = pk.strip().replace("\\n", "\n")
-      if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
-        pk = "-----BEGIN PRIVATE KEY-----\n" + pk
-      if not pk.endswith("-----END PRIVATE KEY-----"):
-        pk = pk + "\n-----END PRIVATE KEY-----"
-      secrets_dict["private_key"] = pk
-
-    gc = gspread.service_account_from_dict(secrets_dict)
+    # Utilisation directe du fichier JSON local présent dans le projet
+    gc = gspread.service_account(filename="gcp_service_account.json")
     spreadsheet = gc.open(SPREADSHEET_NAME)
     return spreadsheet
   except Exception as e:
