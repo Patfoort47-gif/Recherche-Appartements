@@ -30,7 +30,7 @@ def load_data():
 df = load_data()
 
 
-# Géocodage précis privilégiant l'API pour les adresses exactes
+# Géocodage hybride équilibré
 @st.cache_data(ttl=3600)
 def get_lat_lon(query_str):
   if not query_str or pd.isna(query_str):
@@ -39,7 +39,7 @@ def get_lat_lon(query_str):
   query_str = str(query_str).strip()
   query_lower = query_str.lower()
 
-  # Villes et quartiers de référence de secours
+  # Base locale de secours (villes et grands quartiers)
   villes_fixes = {
       "saint-gilles": {"lat": 43.6811, "lon": 4.4328},
       "arles": {"lat": 43.6767, "lon": 4.6278},
@@ -52,20 +52,21 @@ def get_lat_lon(query_str):
       "griffeuille": {"lat": 43.6680, "lon": 4.6380},
   }
 
-  # Si c'est juste un nom de ville sans numéro de rue, on utilise la base fixe directement
-  if query_lower in villes_fixes and not any(
-      char.isdigit() for char in query_str
-  ):
-    return villes_fixes[query_lower]["lat"], villes_fixes[query_lower]["lon"]
+  # Si c'est juste un nom de ville/quartier sans numéro de rue, on renvoie direct la base fixe
+  has_digits = any(char.isdigit() for char in query_str)
+  if not has_digits:
+    for k, coords in villes_fixes.items():
+      if k in query_lower:
+        return coords["lat"], coords["lon"]
 
-  # Interrogation de l'API Nominatim pour les adresses précises
+  # Sinon, on interroge l'API pour les adresses précises (rues, numéros)
   search_query = (
       query_str if "france" in query_lower else f"{query_str}, France"
   )
   url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
 
   try:
-    headers = {"User-Agent": "AppartementSearchApp/6.0"}
+    headers = {"User-Agent": "AppartementSearchApp/7.0"}
     response = requests.get(url, headers=headers, timeout=3)
     if response.status_code == 200:
       data = response.json()
@@ -74,7 +75,7 @@ def get_lat_lon(query_str):
   except Exception:
     pass
 
-  # Repli sur le dictionnaire si l'API échoue
+  # Repli partiel sur le dictionnaire si l'API ne répond pas
   for k, coords in villes_fixes.items():
     if k in query_lower:
       return coords["lat"], coords["lon"]
@@ -264,9 +265,7 @@ if not df.empty:
       st.info("Aucun rendez-vous n'est actuellement renseigné.")
 
   with tab3:
-    st.subheader(
-        "🗺️ Carte Interactive (Adresses exactes & Répartition naturelle)"
-    )
+    st.subheader("🗺️ Carte Interactive (Équilibrée et Précise)")
 
     m = folium.Map(location=[43.6767, 4.6278], zoom_level=12, control_scale=True)
 
@@ -277,12 +276,12 @@ if not df.empty:
         lieu_text = str(row["Ville / Quartier"])
         lat, lon = get_lat_lon(lieu_text)
 
-        # Empêche la superposition exacte en répartissant les doublons en cercle naturel
+        # Répartition douce en étoile uniquement si plusieurs biens ont exactement les mêmes coordonnées
         coord_key = (round(lat, 4), round(lon, 4))
         if coord_key in coord_counts:
           coord_counts[coord_key] += 1
-          angle = coord_counts[coord_key] * 2.399
-          r = 0.00035 * math.sqrt(coord_counts[coord_key])
+          angle = coord_counts[coord_key] * 2.4
+          r = 0.0003 * math.sqrt(coord_counts[coord_key])
           lat += r * math.cos(angle)
           lon += r * math.sin(angle)
         else:
