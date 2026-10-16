@@ -20,14 +20,18 @@ SPREADSHEET_NAME = "Appartements Arles"
 @st.cache_resource
 def init_connection():
   try:
-    # Récupération propre des secrets sous forme de dict
+    # Récupération des secrets
     secrets_dict = dict(st.secrets["gcp_service_account"])
 
-    # Nettoyage automatique du padding de la clé privée si les \n ont été mal interprétés
+    # Nettoyage rigoureux de la clé privée pour éliminer les problèmes de padding et de \n littéraux
     if "private_key" in secrets_dict:
       pk = secrets_dict["private_key"]
-      # Remplace les faux \n textuels par de vrais retours à la ligne
-      pk = pk.replace("\\n", "\n")
+      # S'assure que les retours à la ligne sont des vrais caractères de fin de ligne
+      pk = pk.strip().replace("\\n", "\n")
+      if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
+        pk = "-----BEGIN PRIVATE KEY-----\n" + pk
+      if not pk.endswith("-----END PRIVATE KEY-----"):
+        pk = pk + "\n-----END PRIVATE KEY-----"
       secrets_dict["private_key"] = pk
 
     gc = gspread.service_account_from_dict(secrets_dict)
