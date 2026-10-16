@@ -27,6 +27,61 @@ def load_data():
 
 df = load_data()
 
+# Style CSS personnalisé pour des KPIs bien visibles, un tableau élégant et un design pro
+st.markdown(
+    """
+    <style>
+    .main {
+        background-color: #f4f6f9;
+    }
+    /* Style des cartes KPI */
+    .kpi-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        padding: 24px;
+        border-radius: 14px;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.06);
+        text-align: center;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 20px;
+    }
+    .kpi-title {
+        font-size: 15px;
+        color: #64748b;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .kpi-value {
+        font-size: 36px;
+        color: #1e293b;
+        font-weight: 800;
+    }
+    /* Style des cartes RDV */
+    .rdv-card {
+        background-color: #ffffff;
+        padding: 22px;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+        border-left: 6px solid #ff4b4b;
+        border-top: 1px solid #edf2f7;
+        border-right: 1px solid #edf2f7;
+        border-bottom: 1px solid #edf2f7;
+    }
+    /* Conteneur de la carte */
+    .map-container {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 st.title("🏡 Suivi de Recherche d'Appartements")
 st.markdown(
     "Organisez, visitez et suivez vos coups de cœur à deux en toute simplicité."
@@ -69,12 +124,37 @@ if not df.empty:
   if "Loyer_Num" in df.columns:
     df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
-  # --- KPIs PROPRES ---
-  col1, col2 = st.columns(2)
-  col1.metric("Annonces affichées", len(df))
-  if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
-    loyer_moyen = int(df["Loyer_Num"].mean())
-    col2.metric("Loyer Moyen", f"{loyer_moyen} €")
+  # --- GROS KPIs VISUELS ---
+  col_kpi1, col_kpi2 = st.columns(2)
+
+  nb_annonces = len(df)
+  loyer_moyen_val = (
+      int(df["Loyer_Num"].mean())
+      if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty
+      else 0
+  )
+
+  with col_kpi1:
+    st.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-title">📋 Annonces affichées</div>
+            <div class="kpi-value">{nb_annonces}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+  with col_kpi2:
+    st.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-title">💰 Loyer Moyen</div>
+            <div class="kpi-value">{loyer_moyen_val} €</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
   st.markdown("<br>", unsafe_allow_html=True)
 
@@ -92,8 +172,9 @@ if not df.empty:
     st.subheader("📋 Tableau interactif des annonces")
     st.markdown(
         "Modifiez directement vos notes, avis ou statuts dans le tableau"
-        " ci-dessous."
+        " ci-dessous pour garder un suivi impeccable."
     )
+    st.markdown("<br>", unsafe_allow_html=True)
     st.data_editor(
         df.drop(columns=["Loyer_Num"], errors="ignore"),
         use_container_width=True,
@@ -104,9 +185,10 @@ if not df.empty:
   with tab2:
     st.subheader("📅 Planning des RDV et Visites confirmées")
     st.markdown(
-        "Liste de tous les appartements ayant un rendez-vous ou une visite"
-        " planifiée."
+        "Retrouvez ici uniquement les appartements avec un rendez-vous ou une"
+        " visite planifiée."
     )
+    st.markdown("<br>", unsafe_allow_html=True)
 
     rdv_col = "RDV pris ?" if "RDV pris ?" in df.columns else None
 
@@ -120,36 +202,25 @@ if not df.empty:
 
     if not df_rdv.empty:
       for index, row in df_rdv.iterrows():
-        # Utilisation de conteneurs natifs Streamlit pour s'adapter automatiquement au mode sombre/clair
-        with st.container(border=True):
-          c_left, c_right = st.columns([3, 1])
-          with c_left:
-            st.markdown(
-                f"### 🏠 {row.get('Ville / Quartier', 'Appartement')}"
-            )
-            st.write(
-                f"**💰 Loyer :** {row.get('Loyer', 'N/C')} | **📐 Surface :**"
-                f" {row.get('M²')} m² | **🚪 Pièces :** {row.get('Pièces')}"
-            )
-            st.write(f"**🏢 Agence / Contact :** {row.get('Agence', 'N/C')}")
-            st.success(f"**📅 RDV :** {row.get('RDV pris ?')}")
-            if (
-                pd.notna(row.get("Réponse"))
-                and str(row.get("Réponse")).strip() != ""
-            ):
-              st.info(f"**💬 Notes :** {row.get('Réponse')}")
-          with c_right:
-            lien = row.get("Lien Annonce", "#")
-            if pd.notna(lien) and str(lien).startswith("http"):
-              st.markdown("<br>", unsafe_allow_html=True)
-              st.markdown(
-                  f"<a href='{lien}' target='_blank' style='background-color:"
-                  " #ff4b4b; color: white; padding: 10px 15px; text-decoration:"
-                  " none; border-radius: 5px; font-weight: bold; display:"
-                  " inline-block; text-align: center;'>🔗 Voir"
-                  " l'annonce</a>",
-                  unsafe_allow_html=True,
-              )
+        lien = row.get("Lien Annonce", "#")
+        btn_html = ""
+        if pd.notna(lien) and str(lien).startswith("http"):
+          btn_html = f"<a href='{lien}' target='_blank' style='background-color: #ff4b4b; color: white; padding: 8px 14px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; float: right;'>🔗 Voir l'annonce</a>"
+
+        st.markdown(
+            f"""
+                <div class="rdv-card">
+                    {btn_html}
+                    <h3 style="margin-top:0; color: #1e293b;">🏠 {row.get('Ville / Quartier', 'Appartement')}</h3>
+                    <p style="margin: 6px 0; color: #475569;"><b>💰 Loyer :</b> {row.get('Loyer', 'N/C')} | <b>📐 Surface :</b> {row.get('M²')} m² | <b>🚪 Pièces :</b> {row.get('Pièces')}</p>
+                    <p style="margin: 6px 0; color: #475569;"><b>🏢 Agence / Contact :</b> {row.get('Agence', 'N/C')}</p>
+                    <hr style="margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;">
+                    <p style="margin: 6px 0; color: #16a34a; font-size: 16px;"><b>📅 RDV :</b> {row.get('RDV pris ?')}</p>
+                    {"<p style='margin: 6px 0; color: #334155;'><b>💬 Notes :</b> " + str(row.get('Réponse')) + "</p>" if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '' else ""}
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
     else:
       st.info(
           "Aucun rendez-vous n'est actuellement renseigné. Indiquez une"
@@ -160,9 +231,10 @@ if not df.empty:
   with tab3:
     st.subheader("🗺️ Carte Interactive des Appartements")
     st.markdown(
-        "Cliquez sur un marqueur pour afficher les informations et accéder au"
-        " lien."
+        "Visualisez l'emplacement des biens. Cliquez sur un marqueur pour"
+        " ouvrir l'infobulle et accéder au lien."
     )
+    st.markdown("<br>", unsafe_allow_html=True)
 
     coords_villes = {
         "Arles": {"lat": 43.6767, "lon": 4.6278},
@@ -196,13 +268,13 @@ if not df.empty:
           lien = "#"
 
         popup_html = f"""
-                <div style="font-family: sans-serif; width: 200px;">
-                    <b>{ville_text}</b><br>
+                <div style="font-family: sans-serif; width: 210px;">
+                    <b style="color: #1e293b; font-size: 14px;">{ville_text}</b><hr style="margin: 5px 0;">
                     <b>Loyer :</b> {loyer}<br>
                     <b>Surface :</b> {surface} m²<br>
                     <b>Pièces :</b> {pieces}<br>
                     <b>Agence :</b> {agence}<br><br>
-                    <a href="{lien}" target="_blank" style="background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">🔗 Voir l'annonce</a>
+                    <a href="{lien}" target="_blank" style="background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold; text-align: center;">🔗 Voir l'annonce</a>
                 </div>
                 """
 
@@ -213,10 +285,19 @@ if not df.empty:
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
+    # Affichage de la carte dans un conteneur soigné
+    st.markdown('<div class="map-container">', unsafe_allow_html=True)
     folium_static(m, width=1100, height=550)
+    st.markdown("</div>", unsafe_allow_html=True)
 
   with tab4:
     st.subheader("➕ Ajouter un nouvel appartement")
+    st.markdown(
+        "Remplissez les informations ci-dessous pour générer la ligne à ajouter"
+        " à votre Google Sheet."
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
     with st.form("ajout_appartement_form"):
       c1, c2, c3 = st.columns(3)
       with c1:
