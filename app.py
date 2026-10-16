@@ -12,19 +12,21 @@ st.set_page_config(
     layout="wide",
 )
 
-# Nom de votre Google Sheet en ligne
-SPREADSHEET_NAME = "Appartements Arles"
+SPREADSHEET_NAME = (  # Assurez-vous que c'est le nom exact de votre Google Sheet
+    "Appartements Arles"
+)
 
 
-# Connexion sécurisée à Google Sheets via les secrets Streamlit (en écriture et lecture)
+# Connexion sécurisée avec affichage de l'erreur exacte si échec
 @st.cache_resource
 def init_connection():
   try:
-    # Utilise les secrets configurés dans Streamlit Cloud
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
     spreadsheet = gc.open(SPREADSHEET_NAME)
     return spreadsheet
   except Exception as e:
+    # Affiche l'erreur technique précise dans Streamlit pour comprendre le blocage
+    st.error(f"Détail technique de l'erreur Google Sheets : {e}")
     return None
 
 
