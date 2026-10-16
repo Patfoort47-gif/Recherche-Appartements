@@ -1,3 +1,4 @@
+import json
 import random
 import folium
 import gspread
@@ -12,16 +13,24 @@ st.set_page_config(
     layout="wide",
 )
 
-SPREADSHEET_NAME = (  # Assurez-vous que c'est le nom exact de votre Google Sheet
-    "Appartements Arles"
-)
+SPREADSHEET_NAME = "Appartements Arles"
 
 
-# Connexion sécurisée avec affichage de l'erreur exacte si échec
+# Connexion sécurisée ultra-robuste gérant le formatage de la clé
 @st.cache_resource
 def init_connection():
   try:
-    gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
+    # Récupération propre des secrets sous forme de dict
+    secrets_dict = dict(st.secrets["gcp_service_account"])
+
+    # Nettoyage automatique du padding de la clé privée si les \n ont été mal interprétés
+    if "private_key" in secrets_dict:
+      pk = secrets_dict["private_key"]
+      # Remplace les faux \n textuels par de vrais retours à la ligne
+      pk = pk.replace("\\n", "\n")
+      secrets_dict["private_key"] = pk
+
+    gc = gspread.service_account_from_dict(secrets_dict)
     spreadsheet = gc.open(SPREADSHEET_NAME)
     return spreadsheet
   except Exception as e:
