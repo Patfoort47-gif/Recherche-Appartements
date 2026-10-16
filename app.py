@@ -6,7 +6,7 @@ from streamlit_folium import folium_static
 
 # Configuration de la page
 st.set_page_config(
-    page_title="Suivi Avancé - Recherche Appartements",
+    page_title="Suivi de Recherche d'Appartements",
     page_icon="🏡",
     layout="wide",
 )
@@ -27,8 +27,36 @@ def load_data():
 
 df = load_data()
 
+# Style CSS personnalisé pour embellir l'interface (cartes, métriques, polices)
+st.markdown(
+    """
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .rdv-card {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+        border-left: 5px solid #ff4b4b;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 st.title("🏡 Suivi de Recherche d'Appartements")
-st.markdown("Organisez, visitez et suivez vos coups de cœur à deux en toute simplicité.")
+st.markdown(
+    "Organisez, visitez et suivez vos coups de cœur à deux en toute simplicité."
+)
 
 if not df.empty:
   # Nettoyage sécurisé du loyer pour les filtres
@@ -61,34 +89,36 @@ if not df.empty:
   else:
     max_loyer_val = 1000
 
-  budget_max = st.sidebar.slider("Budget Loyer Max (€)", 400, 1500, max_loyer_val, 25)
+  budget_max = st.sidebar.slider(
+      "Budget Loyer Max (€)", 400, 1500, max_loyer_val, 25
+  )
   if "Loyer_Num" in df.columns:
     df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
-  # --- KPIs ÉPURÉS ---
+  # --- KPIs ÉPURÉS ET DESIGN ---
   col1, col2 = st.columns(2)
   col1.metric("Annonces affichées", len(df))
   if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
     loyer_moyen = int(df["Loyer_Num"].mean())
     col2.metric("Loyer Moyen", f"{loyer_moyen} €")
 
-  st.markdown("---")
+  st.markdown("<br>", unsafe_allow_html=True)
 
   # --- ONGLETS PRINCIPAUX ---
   tab1, tab2, tab3, tab4 = st.tabs(
       [
           "📋 Tableau & Modifications",
-          "📅 Suivi des RDV & Visites",
+          "📅 Planning des RDV",
           "🗺️ Carte Interactive",
           "➕ Ajouter un bien",
       ]
   )
 
   with tab1:
-    st.subheader("Tableau interactif des annonces")
-    st.info(
-        "💡 Modifiez directement les informations dans le tableau ci-dessous si"
-        " besoin."
+    st.subheader("📋 Tableau interactif des annonces")
+    st.markdown(
+        "Modifiez directement vos notes, avis ou statuts dans le tableau"
+        " ci-dessous."
     )
     st.data_editor(
         df.drop(columns=["Loyer_Num"], errors="ignore"),
@@ -98,47 +128,49 @@ if not df.empty:
     )
 
   with tab2:
-    st.subheader("📅 Planning des RDV et Visites")
+    st.subheader("📅 Planning des RDV et Visites confirmées")
     st.markdown(
-        "Retrouvez ici uniquement les appartements pour lesquels un"
-        " rendez-vous ou une visite est planifié."
+        "Liste de tous les appartements ayant un rendez-vous ou une visite"
+        " planifiée."
     )
 
-    # Filtrage des lignes ayant un RDV ou une information de visite
     rdv_col = "RDV pris ?" if "RDV pris ?" in df.columns else None
-    rep_col = "Réponse" if "Réponse" in df.columns else None
 
     df_rdv = pd.DataFrame()
-    if rdv_col and rep_col:
-      # On filtre les lignes où le champ RDV n'est pas vide OU contient des mots clés de visite dans réponse
+    if rdv_col:
+      # Filtrage strict : uniquement les lignes où le champ RDV n'est pas vide (pas NaN, pas vide, pas 'nan')
       df_rdv = df[
           df[rdv_col].notna()
           & (df[rdv_col].astype(str).str.strip() != "")
-          | df[rep_col].astype(str).str.lower().str.contains("visite|rdv|lundi|samedi|mardi|mercredi|jeudi|vendredi|dimanche")
+          & (df[rdv_col].astype(str).str.lower() != "nan")
       ]
 
     if not df_rdv.empty:
       for index, row in df_rdv.iterrows():
-        with st.container():
-          col_a, col_b = st.columns([3, 1])
-          with col_a:
-            st.markdown(f"### 🏠 {row.get('Ville / Quartier', 'Appartement')}")
-            st.write(f"**Loyer :** {row.get('Loyer', 'N/C')} | **Surface :** {row.get('M²')} m² | **Pièces :** {row.get('Pièces')}")
-            st.write(f"**Agence / Contact :** {row.get('Agence', 'N/C')}")
-            if pd.notna(row.get('RDV pris ?')) and str(row.get('RDV pris ?')).strip() != '':
-              st.success(f"**📅 RDV :** {row.get('RDV pris ?')}")
-            if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '':
-              st.info(f"**💬 Notes / Réponse :** {row.get('Réponse')}")
-          with col_b:
-            lien = row.get('Lien Annonce', '#')
-            if pd.notna(lien) and str(lien).startswith('http'):
-              st.markdown(f"<br><a href='{lien}' target='_blank' style='background-color: #ff4b4b; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; font-weight: bold;'>🔗 Voir l'annonce</a>", unsafe_allow_html=True)
-          st.markdown("---")
+        lien = row.get("Lien Annonce", "#")
+        btn_html = ""
+        if pd.notna(lien) and str(lien).startswith("http"):
+          btn_html = f"<a href='{lien}' target='_blank' style='background-color: #ff4b4b; color: white; padding: 8px 14px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; float: right;'>🔗 Voir l'annonce</a>"
+
+        st.markdown(
+            f"""
+                <div class="rdv-card">
+                    {btn_html}
+                    <h3 style="margin-top:0; color: #1f77b4;">🏠 {row.get('Ville / Quartier', 'Appartement')}</h3>
+                    <p style="margin: 5px 0;"><b>💰 Loyer :</b> {row.get('Loyer', 'N/C')} | <b>📐 Surface :</b> {row.get('M²')} m² | <b>🚪 Pièces :</b> {row.get('Pièces')}</p>
+                    <p style="margin: 5px 0;"><b>🏢 Agence / Contact :</b> {row.get('Agence', 'N/C')}</p>
+                    <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+                    <p style="margin: 5px 0; color: #2e7d32; font-size: 16px;"><b>📅 RDV :</b> {row.get('RDV pris ?')}</p>
+                    {"<p style='margin: 5px 0; color: #555;'><b>💬 Notes :</b> " + str(row.get('Réponse')) + "</p>" if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '' else ""}
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
     else:
       st.info(
-          "Aucun rendez-vous n'est actuellement renseigné dans le tableau."
-          " Remplissez la colonne 'RDV pris ?' dans votre Google Sheet ou le"
-          " tableau pour les voir apparaître ici !"
+          "Aucun rendez-vous n'est actuellement renseigné. Indiquez une"
+          " information dans la colonne 'RDV pris ?' de votre Google Sheet pour"
+          " qu'elle apparaisse ici."
       )
 
   with tab3:
