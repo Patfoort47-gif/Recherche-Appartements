@@ -25,7 +25,6 @@ def init_connection():
     spreadsheet = gc.open(SPREADSHEET_NAME)
     return spreadsheet
   except Exception as e:
-    # Affiche l'erreur technique précise dans Streamlit pour comprendre le blocage
     st.error(f"Détail technique de l'erreur Google Sheets : {e}")
     return None
 
