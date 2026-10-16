@@ -30,17 +30,20 @@ def load_data():
 df = load_data()
 
 
-# Géocodage hybride et robuste pour les adresses précises et les villes
-@st.cache_data(ttl=3600)
-def get_lat_lon(query_str):
+# Géocodage robuste avec dictionnaire local enrichi pour éviter les pertes de points
+def get_lat_lon(query_str, index_row=0):
   if not query_str or pd.isna(query_str):
-    return 43.6767, 4.6278  # Centre par défaut (Arles)
+    # Repli avec décalage unique basé sur l'index pour ne pas superposer
+    return 43.6767 + (index_row * 0.001), 4.6278 + (index_row * 0.001)
 
   query_str = str(query_str).strip()
   query_lower = query_str.lower()
 
-  # Villes et quartiers principaux de référence
-  villes_fixes = {
+  # Base locale des rues, quartiers et villes pour un affichage instantané et garanti
+  lieux_fixes = {
+      "fernand benoît": {"lat": 43.6775, "lon": 4.6285},
+      "fernand benoit": {"lat": 43.6775, "lon": 4.6285},
+      "anatole france": {"lat": 43.6815, "lon": 4.4330},
       "saint-gilles": {"lat": 43.6811, "lon": 4.4328},
       "arles": {"lat": 43.6767, "lon": 4.6278},
       "bellegarde": {"lat": 43.7533, "lon": 4.5158},
@@ -52,26 +55,32 @@ def get_lat_lon(query_str):
       "griffeuille": {"lat": 43.6680, "lon": 4.6380},
   }
 
-  if query_lower in villes_fixes:
-    return villes_fixes[query_lower]["lat"], villes_fixes[query_lower]["lon"]
+  for k, coords in lieux_fixes.items():
+    if k in query_lower:
+      # Ajout d'un micro-décalage unique par index pour différencier les biens d'un même secteur
+      return coords["lat"] + (index_row * 0.0003), coords["lon"] + (
+          index_row * 0.0003
+      )
 
-  # Pour les adresses précises (ex: "Rue Fernand Benoît, 13200 Arles")
-  search_query = (
-      query_str if "france" in query_lower else f"{query_str}, France"
-  )
-  url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
-
+  # Tentative de géocodage externe si non trouvé dans la base locale
   try:
-    headers = {"User-Agent": "AppartementSearchApp/3.0"}
-    response = requests.get(url, headers=headers, timeout=3)
+    search_query = (
+        query_str if "france" in query_lower else f"{query_str}, France"
+    )
+    url = f"https://nominatim.openstreetmap.org/search?q={quote(search_query)}&format=json&limit=1"
+    headers = {"User-Agent": "AppartementSearchApp/4.0"}
+    response = requests.get(url, headers=headers, timeout=2)
     if response.status_code == 200:
       data = response.json()
       if data:
-        return float(data[0]["lat"]), float(data[0]["lon"])
+        return float(data[0]["lat"]) + (index_row * 0.0003), float(
+            data[0]["lon"]
+        ) + (index_row * 0.0003)
   except Exception:
     pass
 
-  return 43.6767, 4.6278
+  # Dernier repli garanti autour d'Arles avec décalage
+  return 43.6767 + (index_row * 0.001), 4.6278 + (index_row * 0.001)
 
 
 # Style CSS Mode Sombre épuré
@@ -257,27 +266,17 @@ if not df.empty:
 
   with tab3:
     st.subheader(
-        "🗺️ Carte Interactive (Anti-superposition et adresses exactes)"
+        "🗺️ Carte Interactive (Points garantis & Anti-superposition)"
     )
 
     m = folium.Map(location=[43.6767, 4.6278], zoom_level=12, control_scale=True)
 
     if "Ville / Quartier" in df.columns:
-      coord_counts = {}
-
       for index, row in df.iterrows():
-        lieu_text = str(row["Ville / Quartier"])
-        lat, lon = get_lat_lon(lieu_text)
+        lieu_text = row.get("Ville / Quartier", "")
 
-        # Empêche la superposition si plusieurs biens ont exactement la même position
-        coord_key = (round(lat, 4), round(lon, 4))
-        if coord_key in coord_counts:
-          coord_counts[coord_key] += 1
-          offset = coord_counts[coord_key] * 0.0003
-          lat += offset * random.choice([-1, 1])
-          lon += offset * random.choice([-1, 1])
-        else:
-          coord_counts[coord_key] = 0
+        # Appel avec l'index de la ligne pour garantir un point unique et distinct
+        lat, lon = get_lat_lon(lieu_text, index_row=index)
 
         loyer = str(row.get("Loyer", "N/C"))
         surface = str(row.get("M²", "N/C"))
