@@ -27,32 +27,6 @@ def load_data():
 
 df = load_data()
 
-# Style CSS personnalisé pour embellir l'interface (cartes, métriques, polices)
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .rdv-card {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
-        border-left: 5px solid #ff4b4b;
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
-
 st.title("🏡 Suivi de Recherche d'Appartements")
 st.markdown(
     "Organisez, visitez et suivez vos coups de cœur à deux en toute simplicité."
@@ -95,7 +69,7 @@ if not df.empty:
   if "Loyer_Num" in df.columns:
     df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
-  # --- KPIs ÉPURÉS ET DESIGN ---
+  # --- KPIs PROPRES ---
   col1, col2 = st.columns(2)
   col1.metric("Annonces affichées", len(df))
   if "Loyer_Num" in df.columns and not df["Loyer_Num"].dropna().empty:
@@ -138,7 +112,6 @@ if not df.empty:
 
     df_rdv = pd.DataFrame()
     if rdv_col:
-      # Filtrage strict : uniquement les lignes où le champ RDV n'est pas vide (pas NaN, pas vide, pas 'nan')
       df_rdv = df[
           df[rdv_col].notna()
           & (df[rdv_col].astype(str).str.strip() != "")
@@ -147,25 +120,36 @@ if not df.empty:
 
     if not df_rdv.empty:
       for index, row in df_rdv.iterrows():
-        lien = row.get("Lien Annonce", "#")
-        btn_html = ""
-        if pd.notna(lien) and str(lien).startswith("http"):
-          btn_html = f"<a href='{lien}' target='_blank' style='background-color: #ff4b4b; color: white; padding: 8px 14px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; float: right;'>🔗 Voir l'annonce</a>"
-
-        st.markdown(
-            f"""
-                <div class="rdv-card">
-                    {btn_html}
-                    <h3 style="margin-top:0; color: #1f77b4;">🏠 {row.get('Ville / Quartier', 'Appartement')}</h3>
-                    <p style="margin: 5px 0;"><b>💰 Loyer :</b> {row.get('Loyer', 'N/C')} | <b>📐 Surface :</b> {row.get('M²')} m² | <b>🚪 Pièces :</b> {row.get('Pièces')}</p>
-                    <p style="margin: 5px 0;"><b>🏢 Agence / Contact :</b> {row.get('Agence', 'N/C')}</p>
-                    <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
-                    <p style="margin: 5px 0; color: #2e7d32; font-size: 16px;"><b>📅 RDV :</b> {row.get('RDV pris ?')}</p>
-                    {"<p style='margin: 5px 0; color: #555;'><b>💬 Notes :</b> " + str(row.get('Réponse')) + "</p>" if pd.notna(row.get('Réponse')) and str(row.get('Réponse')).strip() != '' else ""}
-                </div>
-                """,
-            unsafe_allow_html=True,
-        )
+        # Utilisation de conteneurs natifs Streamlit pour s'adapter automatiquement au mode sombre/clair
+        with st.container(border=True):
+          c_left, c_right = st.columns([3, 1])
+          with c_left:
+            st.markdown(
+                f"### 🏠 {row.get('Ville / Quartier', 'Appartement')}"
+            )
+            st.write(
+                f"**💰 Loyer :** {row.get('Loyer', 'N/C')} | **📐 Surface :**"
+                f" {row.get('M²')} m² | **🚪 Pièces :** {row.get('Pièces')}"
+            )
+            st.write(f"**🏢 Agence / Contact :** {row.get('Agence', 'N/C')}")
+            st.success(f"**📅 RDV :** {row.get('RDV pris ?')}")
+            if (
+                pd.notna(row.get("Réponse"))
+                and str(row.get("Réponse")).strip() != ""
+            ):
+              st.info(f"**💬 Notes :** {row.get('Réponse')}")
+          with c_right:
+            lien = row.get("Lien Annonce", "#")
+            if pd.notna(lien) and str(lien).startswith("http"):
+              st.markdown("<br>", unsafe_allow_html=True)
+              st.markdown(
+                  f"<a href='{lien}' target='_blank' style='background-color:"
+                  " #ff4b4b; color: white; padding: 10px 15px; text-decoration:"
+                  " none; border-radius: 5px; font-weight: bold; display:"
+                  " inline-block; text-align: center;'>🔗 Voir"
+                  " l'annonce</a>",
+                  unsafe_allow_html=True,
+              )
     else:
       st.info(
           "Aucun rendez-vous n'est actuellement renseigné. Indiquez une"
