@@ -27,14 +27,13 @@ def load_data():
 
 df = load_data()
 
-# Style CSS 100% optimisé Mode Sombre (Dark Mode élégant et lisible)
+# Style CSS 100% optimisé Mode Sombre (épuré, sans blocs vides)
 st.markdown(
     """
     <style>
     .main {
         background-color: #0e1117;
     }
-    /* Style des cartes KPI en mode sombre */
     .kpi-card {
         background: linear-gradient(135deg, #1f2937 100%, #111827 0%);
         padding: 24px;
@@ -57,7 +56,6 @@ st.markdown(
         color: #f9fafb;
         font-weight: 800;
     }
-    /* Style des cartes RDV en mode sombre */
     .rdv-card {
         background-color: #1f2937;
         padding: 22px;
@@ -68,14 +66,6 @@ st.markdown(
         border-top: 1px solid #374151;
         border-right: 1px solid #374151;
         border-bottom: 1px solid #374151;
-    }
-    /* Conteneur de la carte en mode sombre */
-    .map-container {
-        background-color: #1f2937;
-        padding: 15px;
-        border-radius: 14px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        border: 1px solid #374151;
     }
     </style>
 """,
@@ -88,7 +78,6 @@ st.markdown(
 )
 
 if not df.empty:
-  # Nettoyage sécurisé du loyer pour les filtres
   if "Loyer" in df.columns:
     df["Loyer_Num"] = (
         df["Loyer"]
@@ -98,13 +87,12 @@ if not df.empty:
     )
     df["Loyer_Num"] = pd.to_numeric(df["Loyer_Num"], errors="coerce")
 
-  # --- BARRE LATÉRALE DE FILTRES AMÉLIORÉE ---
+  # --- BARRE LATÉRALE DE FILTRES ---
   st.sidebar.header("🔍 Filtres & Recherche")
 
-  # Recherche textuelle rapide (par agence, ville ou mots-clés)
   recherche_texte = st.sidebar.text_input(
       "Recherche rapide (Mot-clé)",
-      placeholder="Ex: Le Pain, Agence, Centre...",
+      placeholder="Ex: Agence, Centre...",
   )
 
   if "Ville / Quartier" in df.columns:
@@ -130,16 +118,14 @@ if not df.empty:
   if "Loyer_Num" in df.columns:
     df = df[df["Loyer_Num"].fillna(budget_max) <= budget_max]
 
-  # Application du filtre textuel s'il est rempli
   if recherche_texte:
     mask = df.astype(str).apply(
         lambda x: x.str.contains(recherche_texte, case=False, na=False)
     ).any(axis=1)
     df = df[mask]
 
-  # --- GROS KPIs VISUELS (MODE SOMBRE) ---
+  # --- KPIs ---
   col_kpi1, col_kpi2 = st.columns(2)
-
   nb_annonces = len(df)
   loyer_moyen_val = (
       int(df["Loyer_Num"].mean())
@@ -171,7 +157,7 @@ if not df.empty:
 
   st.markdown("<br>", unsafe_allow_html=True)
 
-  # --- ONGLETS PRINCIPAUX ---
+  # --- ONGLETS ---
   tab1, tab2, tab3, tab4 = st.tabs(
       [
           "📋 Tableau & Modifications",
@@ -184,25 +170,28 @@ if not df.empty:
   with tab1:
     st.subheader("📋 Tableau interactif des annonces")
     st.markdown(
-        "Modifiez directement vos notes, avis ou statuts dans le tableau"
-        " ci-dessous."
+        "Modifiez vos notes ou avis directement ci-dessous. Pour enregistrer"
+        " les modifications dans votre Google Sheet, utilisez le bouton de"
+        " synchronisation."
     )
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.data_editor(
+    
+    edited_df = st.data_editor(
         df.drop(columns=["Loyer_Num"], errors="ignore"),
         use_container_width=True,
         num_rows="dynamic",
         key="main_editor",
     )
+    
+    # Bouton pour expliciter la synchro Google Sheets
+    if st.button("🔄 Synchroniser les modifications avec Google Sheet"):
+      st.info(
+          "Pour activer l'écriture directe dans Google Sheets, il est nécessaire"
+          " de configurer un compte de service Google (API) dans les secrets"
+          " de Streamlit Cloud. Voulez-vous que je vous donne la procédure ?"
+      )
 
   with tab2:
     st.subheader("📅 Planning des RDV et Visites confirmées")
-    st.markdown(
-        "Retrouvez ici uniquement les appartements avec un rendez-vous ou une"
-        " visite planifiée."
-    )
-    st.markdown("<br>", unsafe_allow_html=True)
-
     rdv_col = "RDV pris ?" if "RDV pris ?" in df.columns else None
 
     df_rdv = pd.DataFrame()
@@ -235,20 +224,11 @@ if not df.empty:
             unsafe_allow_html=True,
         )
     else:
-      st.info(
-          "Aucun rendez-vous n'est actuellement renseigné. Indiquez une"
-          " information dans la colonne 'RDV pris ?' de votre Google Sheet pour"
-          " qu'elle apparaisse ici."
-      )
+      st.info("Aucun rendez-vous n'est actuellement renseigné.")
 
   with tab3:
     st.subheader("🗺️ Carte Interactive des Appartements")
-    st.markdown(
-        "Visualisez l'emplacement des biens. Cliquez sur un marqueur pour"
-        " ouvrir l'infobulle et accéder au lien."
-    )
-    st.markdown("<br>", unsafe_allow_html=True)
-
+    
     coords_villes = {
         "Arles": {"lat": 43.6767, "lon": 4.6278},
         "Saint-Gilles": {"lat": 43.6811, "lon": 4.4328},
@@ -298,19 +278,11 @@ if not df.empty:
             icon=folium.Icon(color="red", icon="home", prefix="fa"),
         ).add_to(m)
 
-    # Conteneur propre et sombre pour la carte
-    st.markdown('<div class="map-container">', unsafe_allow_html=True)
-    folium_static(m, width=1100, height=550)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Affichage direct de la carte sans conteneur blanc parasite
+    folium_static(m, width=1150, height=550)
 
   with tab4:
     st.subheader("➕ Ajouter un nouvel appartement")
-    st.markdown(
-        "Remplissez les informations ci-dessous pour générer proprement la ligne"
-        " à copier dans votre Google Sheet."
-    )
-    st.markdown("<br>", unsafe_allow_html=True)
-
     with st.form("ajout_appartement_form", clear_on_submit=False):
       c1, c2, c3 = st.columns(3)
       with c1:
