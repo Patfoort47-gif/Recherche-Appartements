@@ -1,4 +1,3 @@
-import json
 import random
 import folium
 import gspread
@@ -16,11 +15,10 @@ st.set_page_config(
 SPREADSHEET_NAME = "Appartements Arles"
 
 
-# Connexion sécurisée ultra-robuste gérant le formatage de la clé
+# Connexion directe via le fichier JSON présent à la racine du projet
 @st.cache_resource
 def init_connection():
   try:
-    # Utilisation directe du fichier JSON local présent dans le projet
     gc = gspread.service_account(filename="gcp_service_account.json")
     spreadsheet = gc.open(SPREADSHEET_NAME)
     return spreadsheet
